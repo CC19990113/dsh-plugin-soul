@@ -17,6 +17,24 @@ memory/YYYY-MM-DD.md  日笔记（不注入，soul_recall 检索）
 升格规则抄的是「被反复用到才毕业」：日笔记不注入，只有被 `soul_recall` 命中 **≥3 次** 的条目才够格，
 `action:"promote"` 时按维度写进 `MEMORY.md` 对应小节（带 `来源 memory/...#L3；命中 4 次`）。
 
+### 人类评分决定写入闸门
+
+每条 assistant 回复的操作栏里多三档：**👎 / 😑 / 👍**（挂在 `conversation.chat.assistant-actions` 槽位，官方 👍👎 旁边）。
+
+```
+weight = Σ(score × 0.5^(ageDays/7)) / Σ(decay)  → 映射到 [0,1]
+score ∈ {-1, 0, +1}；只取最近 20 条；样本 <3 时不设闸门（冷启动不拦）
+```
+
+| 权重 | 效果 |
+|---|---|
+| 无样本 / <0.35… | 样本不足 → 不设闸门；<0.35 → **拒绝写人格**（只许写 journal / 日笔记） |
+| 0.35 ~ 0.6 | 只许小修（单次 ≤300 字符） |
+| ≥0.6 | 正常写入（≤800 字符） |
+| ≥0.75 | 日笔记升格门槛从 3 次降到 **2 次**（好评加速毕业） |
+
+每次写入都把当时的 `rating=` 记进 CHANGELOG，事后可回查"这条人格是在什么评价下写进去的"。
+
 ## 为什么不用 `@deepseek-ai/dsh-persona`
 
 官方 persona 插件的 config 只有 `prefix / suffix / complete / includeRuntimeContext`，**全是静态字符串**——改一次人格要动 profile patch 并重启。
@@ -31,8 +49,9 @@ memory/YYYY-MM-DD.md  日笔记（不注入，soul_recall 检索）
 | **自改** | `soul_update` 改可写文件：RULES 只读 / 单次 ≤800 字符 / 每日 ≤3 次 / `why` 必填；每次落 git + CHANGELOG，可回滚 |
 | **反思** | `soul_journal` 记观察 → `soul_candidates` 聚合（≥3 次且跨 ≥2 天才够格）→ `soul_dream` 合并升格进 SOUL，并写 `DREAMS.md` |
 | **升级** | `soul_propose_upgrade` 落提案（含改前快照）→ `soul_apply_upgrade` 必须 `confirm:"APPLY"`；白名单 + 逐个 `node --check`，语法不过整体还原 |
+| **评分** | 每条回复下面 👍/😑/👎 三档；加权算成权重，**决定人格文件能不能写、能动多大** |
 
-外加设置页一个 **「人格」tab**：看四份配置、就地编辑（带 why）、看候选池 / 提交 / diff。
+外加设置页一个 **「人格」tab**：看配置、就地编辑（带 why）、看记忆/评分/候选池/提交/diff。
 
 ## 安装
 
@@ -104,6 +123,7 @@ node install.mjs --apply
 | `soul_remember` | 记一条人格记忆（kind: self/user/talk/lesson/pref） |
 | `soul_recall` | 检索人格记忆；命中即 +1 hit，是升格的唯一依据 |
 | `soul_memory` | 记忆状态 / `action:"promote"` 把够格的写进 MEMORY.md |
+| `soul_ratings` | 看评分样本、权重、写入闸门与升格门槛 |
 | `soul_propose_upgrade` | 落升级提案（含 before 快照） |
 | `soul_apply_upgrade` | `confirm:"APPLY"` 才写；语法不过整体还原 |
 | `soul_upgrade_rollback` | 从提案 `before/` 还原 |
@@ -119,6 +139,8 @@ POST /dsh-plugin-soul/api/file         写（同一套四道校验）
 POST /dsh-plugin-soul/api/dream        跑一次反思
 GET  /dsh-plugin-soul/api/diff?name=   相对上一提交的 diff
 GET  /dsh-plugin-soul/api/dreams       DREAMS.md 全文
+POST /dsh-plugin-soul/api/rating       {sessionId, messageId, score}
+GET  /dsh-plugin-soul/api/ratings      权重 + 闸门
 ```
 
 浏览器半侧是 CJS factory（`window.__ModuleLoader__.load`），只 `require("react")`，没有构建步骤。
@@ -147,7 +169,7 @@ GET  /dsh-plugin-soul/api/dreams       DREAMS.md 全文
 ## 开发
 
 ```bash
-npm test        # 47 项：存储 17 + 反思/升级 13 + 记忆 17
+npm test        # 60 项：存储 17 + 反思/升级 13 + 记忆 17 + 评分 13
 ```
 
 ```
@@ -155,11 +177,12 @@ lib/index.js      入口：注入段 + 11 工具 + HTTP API
 lib/soul-store.js 存储：播种/预算/四道校验/git/CHANGELOG/回滚
 lib/journal.js    日志与候选池：归一化、跨天计数、证据、闸门
 lib/memory.js     记忆：日笔记、检索打分、命中计数、升格闸门
+lib/ratings.js    人类评分：权重、写入闸门、升格门槛
 lib/dream.js      反思：light 重算 → deep 合并升格 → DREAMS.md
 lib/upgrade.js    自我升级：提案、白名单、node --check、整体还原
 lib/client.js     设置页「人格」tab
 templates/*.md    首次播种的初版人格
-test/*.mjs        smoke(17) + features(13) + memory(17)
+test/*.mjs        smoke(17) + features(13) + memory(17) + ratings(13)
 install.mjs       幂等安装（--dry / --apply）
 ```
 
