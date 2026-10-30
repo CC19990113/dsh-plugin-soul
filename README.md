@@ -16,6 +16,8 @@ memory/YYYY-MM-DD.md  日笔记（不注入，soul_recall 检索）
 
 journal 聚合按**主题 key**（如 `identity:name`）走，不按整句 —— 否则每次换个措辞就变成新候选，永远凑不够 3 次。没给 key 的旧观察仍按整句归一化（向后兼容）。
 
+每次升格成功会补一次 git 提交（`soul: promote N 条日记忆 → MEMORY.md`），所以长期记忆也 `git log` 可追、`soul_rollback` 可退。
+
 升格规则抄的是「被反复用到才毕业」：日笔记不注入，只有被 `soul_recall` 命中 **≥3 次** 的条目才够格，
 `action:"promote"` 时按维度写进 `MEMORY.md` 对应小节（带 `来源 memory/...#L3；命中 4 次`）。
 
@@ -171,7 +173,7 @@ GET  /dsh-plugin-soul/api/ratings      权重 + 闸门
 ## 开发
 
 ```bash
-npm test        # 60 项：存储 17 + 反思/升级 13 + 记忆 17 + 评分 13
+npm test        # 64 项：存储 17 + 反思/升级 16 + 记忆 18 + 评分 13
 ```
 
 ```
@@ -184,7 +186,7 @@ lib/dream.js      反思：light 重算 → deep 合并升格 → DREAMS.md
 lib/upgrade.js    自我升级：提案、白名单、node --check、整体还原
 lib/client.js     设置页「人格」tab
 templates/*.md    首次播种的初版人格
-test/*.mjs        smoke(17) + features(13) + memory(17) + ratings(13)
+test/*.mjs        smoke(17) + features(16) + memory(18) + ratings(13)
 install.mjs       幂等安装（--dry / --apply）
 ```
 

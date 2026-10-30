@@ -14,6 +14,7 @@ import os from 'node:os'
 import path from 'node:path'
 import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
+import { execFileSync } from 'node:child_process'
 import { ensureSeed, readFile } from '../lib/soul-store.js'
 import {
   MEMORY_BUDGET,
@@ -182,6 +183,23 @@ check('日记忆与项目记忆隔离（不碰 ~/.dsh/memory）', () => {
   const files = fs.readdirSync(path.join(root, 'memory'))
   assert.ok(files.every((f) => /^\d{4}-\d{2}-\d{2}\.md$/.test(f)))
   assert.ok(!fs.existsSync(path.join(root, 'memory', 'adx-admin-backend')))
+})
+
+check('升格会写进 git 历史（MEMORY.md 可回滚）', () => {
+  const root2 = fs.mkdtempSync(path.join(os.tmpdir(), 'soul-mem-commit-'))
+  ensureSeed(root2)
+  appendMemory({ text: '他说过喜欢被直接反驳', kind: 'user', root: root2, now: d(28) })
+  for (let i = 0; i < 3; i += 1) recall({ query: '反驳', root: root2, now: d(29) })
+  const r = promoteMemories({ root: root2, now: d(29) })
+  assert.equal(r.done.length, 1)
+  assert.notEqual(r.commit, null)
+  assert.notEqual(r.commit, 'no-git', '升格应有 git 提交')
+  const log = execFileSync('git', ['-C', root2, 'log', '--oneline', '--', 'MEMORY.md'], { encoding: 'utf8' }).trim()
+  assert.match(log, /promote 1 条日记忆/)
+  // 回滚能力：soul_rollback 只认 FILES 里的可写文件，MEMORY.md 在其中
+  return import('../lib/soul-store.js').then((m) => {
+    assert.equal(m.FILES['MEMORY.md'].writable, true)
+  })
 })
 
 console.log(`\n通过 ${pass} / 失败 ${fail}`)
