@@ -199,5 +199,38 @@ await check('提案里没变的内容会被跳过', () => {
   )
 })
 
+// ---------- 主题 key（0.4.1：聚合按 key，而不是整句） ----------
+await check('同 key 不同措辞跨三天 → 聚成一条且够格', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'soul-key-'))
+  ensureSeed(root)
+  appendJournal({ text: '名字定为鲸鲸，我认这个称呼', tag: 'identity', key: 'identity:name', root, now: day(27) })
+  appendJournal({ text: '主人给我起名叫鲸鲸', tag: 'identity', key: 'identity:name', root, now: day(28) })
+  appendJournal({ text: '我叫鲸鲸，这事我记得', tag: 'identity', key: 'identity:name', root, now: day(29) })
+  const rows = refreshCandidates(root, { now: day(30) })
+  const hit = rows.find((r) => r.topicKey === 'identity:name')
+  assert.ok(hit, '应按 key 聚合出候选')
+  assert.equal(hit.count, 3)
+  assert.equal(hit.days.length, 3)
+  assert.equal(isEligible(hit), true, '跨三天三次 → 够格')
+})
+
+await check('无 key 的不同措辞仍各自独立（旧行为保留）', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'soul-nokey-'))
+  ensureSeed(root)
+  appendJournal({ text: '今天试了新东西', root, now: day(28) })
+  appendJournal({ text: '今天试了别的东西', root, now: day(29) })
+  const rows = refreshCandidates(root, { now: day(30) })
+  assert.equal(rows.length, 2)
+  assert.ok(rows.every((r) => r.topicKey === null))
+})
+
+await check('主题 key 形状校验', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'soul-badkey-'))
+  ensureSeed(root)
+  assert.throws(() => appendJournal({ text: '内容', key: 'Bad Key!', root }), /主题 key 不合法/)
+  assert.throws(() => appendJournal({ text: '内容', key: 'x'.repeat(65), root }), /主题 key 不合法/)
+  assert.ok(appendJournal({ text: '内容', key: 'ok.key_1-2:3', root }))
+})
+
 console.log(`\n通过 ${pass} / 失败 ${fail}`)
 if (fail > 0) process.exitCode = 1

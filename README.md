@@ -14,6 +14,8 @@ memory/YYYY-MM-DD.md  日笔记（不注入，soul_recall 检索）
 记什么：**关于我**（自我认识）· **关于你**（对你的认识）· **对话里的事** · **我学到的教训** · **偏好怎么变**。
 不记什么：项目代码、技术决策、环境配置、踩坑 —— 那些归项目记忆，塞进来会把每轮注入的预算吃光。
 
+journal 聚合按**主题 key**（如 `identity:name`）走，不按整句 —— 否则每次换个措辞就变成新候选，永远凑不够 3 次。没给 key 的旧观察仍按整句归一化（向后兼容）。
+
 升格规则抄的是「被反复用到才毕业」：日笔记不注入，只有被 `soul_recall` 命中 **≥3 次** 的条目才够格，
 `action:"promote"` 时按维度写进 `MEMORY.md` 对应小节（带 `来源 memory/...#L3；命中 4 次`）。
 
@@ -47,7 +49,7 @@ score ∈ {-1, 0, +1}；只取最近 20 条；样本 <3 时不设闸门（冷启
 |---|---|
 | **注入** | 每轮把 `~/.dsh/soul/*.md` 读进 system prompt（约 2.1k 字符 ≈ 535 tok） |
 | **自改** | `soul_update` 改可写文件：RULES 只读 / 单次 ≤800 字符 / 每日 ≤3 次 / `why` 必填；每次落 git + CHANGELOG，可回滚 |
-| **反思** | `soul_journal` 记观察 → `soul_candidates` 聚合（≥3 次且跨 ≥2 天才够格）→ `soul_dream` 合并升格进 SOUL，并写 `DREAMS.md` |
+| **反思** | `soul_journal` 记观察 → `soul_candidates` 聚合（**按主题 key**，≥3 次且跨 ≥2 天才够格）→ `soul_dream` 合并升格进 SOUL，并写 `DREAMS.md` |
 | **升级** | `soul_propose_upgrade` 落提案（含改前快照）→ `soul_apply_upgrade` 必须 `confirm:"APPLY"`；白名单 + 逐个 `node --check`，语法不过整体还原 |
 | **评分** | 每条回复下面 👍/😑/👎 三档；加权算成权重，**决定人格文件能不能写、能动多大** |
 
@@ -117,7 +119,7 @@ node install.mjs --apply
 | `soul_history` | 最近提交、某文件 diff、升级提案 |
 | `soul_update` | 改可写文件（`content` 或 `append`，`why` 必填） |
 | `soul_rollback` | 回到历史提交 |
-| `soul_journal` | 记一条观察（便宜、不限次） |
+| `soul_journal` | 记一条观察（便宜、不限次）；**同一主题用同一个 `key`** 才能跨天聚合 |
 | `soul_candidates` | 看候选池（是否够格、证据行号） |
 | `soul_dream` | 跑反思；默认预览，`apply:true` 才写 SOUL；可传 `narrative` |
 | `soul_remember` | 记一条人格记忆（kind: self/user/talk/lesson/pref） |
