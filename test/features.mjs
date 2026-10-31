@@ -232,5 +232,40 @@ await check('主题 key 形状校验', () => {
   assert.ok(appendJournal({ text: '内容', key: 'ok.key_1-2:3', root }))
 })
 
+await check('聚合键迁移后不留重复候选（staged + gone 各一份）', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'soul-mig-'))
+  ensureSeed(root)
+  fs.mkdirSync(path.join(root, 'journal'), { recursive: true })
+  const text = '同一段文本'
+  fs.writeFileSync(path.join(root, 'journal', '2026-10-30.md'), `# journal\n\n- 03:00 [bug] ${text}\n`)
+  // 旧格式候选池：键是整句归一化，没有 k:/n: 前缀
+  fs.writeFileSync(
+    path.join(root, '.candidates.json'),
+    JSON.stringify(
+      {
+        version: 1,
+        entries: {
+          [text]: {
+            key: text,
+            text,
+            count: 1,
+            days: ['2026-10-30'],
+            firstSeen: '2026-10-30 03:00',
+            lastSeen: '2026-10-30 03:00',
+            evidence: ['journal/2026-10-30.md#L3'],
+            tags: ['bug'],
+            status: 'staged',
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  )
+  const rows = refreshCandidates(root, { now: day(31) })
+  assert.equal(rows.length, 1, '同证据的旧键条目应被清理，不该出现 staged + gone 两份')
+  assert.equal(rows[0].status, 'staged')
+})
+
 console.log(`\n通过 ${pass} / 失败 ${fail}`)
 if (fail > 0) process.exitCode = 1
