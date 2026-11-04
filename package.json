@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-soul",
-  "version": "0.4.3",
-  "description": "A writable, git-versioned self for DeepSeek Harness: persona files injected every turn, a persona-only memory layer, topic-keyed journal→dream promotion gated by your 👍/😑/👎 ratings, whitelisted self-upgrades, and a Settings persona tab.",
+  "version": "0.5.0",
+  "description": "A writable, git-versioned self for DeepSeek Harness: persona files injected every turn, a persona-only memory layer, topic-keyed journal-to-dream promotion, 👍/😑/👎 ratings that only weight (never block) writes, whitelisted self-upgrades, and a Settings persona tab.",
   "keywords": [
     "dsh",
     "dsh-plugin",

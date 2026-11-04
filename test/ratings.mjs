@@ -90,54 +90,51 @@ check('一周前的评分权重衰减（老的好评拖不动新差评）', () =
 })
 
 // ---------- 闸门 ----------
-check(`样本 <${MIN_SAMPLES} 不设闸门`, () => {
+check(`样本 <${MIN_SAMPLES} 时评分不参与加权`, () => {
   const root = fresh()
   appendRating({ root, sessionId: 's', messageId: 'm1', score: -1, now: base })
   const g = writeGate({ root, now: base })
+  assert.equal(g.samples, 1)
+  assert.match(g.reason, /样本不足/)
   assert.equal(g.allow, true)
   assert.equal(g.maxDelta, 800)
-  assert.match(g.reason, /样本不足/)
 })
 
-check('连续差评 → 拒绝写人格', () => {
+check('连续差评也允许写（评分只加权，不阻塞）', () => {
   const root = fresh()
   for (let i = 0; i < 4; i += 1) appendRating({ root, sessionId: 's', messageId: `m${i}`, score: -1, now: base })
   const g = writeGate({ root, now: base })
-  assert.equal(g.allow, false)
-  assert.equal(g.maxDelta, 0)
+  assert.equal(g.weight, 0)
+  assert.equal(g.allow, true, '差评不该禁止写入')
+  assert.equal(g.maxDelta, 800, '上限与评分无关')
+  assert.match(g.reason, /不阻塞/)
 })
 
-check('混合评分（3好3差，weight=0.5）→ 只许小幅修改', () => {
+check('混合评分（3好3差）同样正常写入', () => {
   const root = fresh()
   for (let i = 0; i < 3; i += 1) appendRating({ root, sessionId: 's', messageId: 'g' + i, score: 1, now: base })
   for (let i = 0; i < 3; i += 1) appendRating({ root, sessionId: 's', messageId: 'b' + i, score: -1, now: base })
   const g = writeGate({ root, now: base })
   assert.equal(g.weight, 0.5)
   assert.equal(g.allow, true)
-  assert.equal(g.maxDelta, 300)
+  assert.equal(g.maxDelta, 800)
 })
 
-check('soul_update 在差评时真的被挡下', () => {
+check('差评时 soul_update 仍能写，并把 rating 记进 CHANGELOG', () => {
   const root = fresh()
   for (let i = 0; i < 4; i += 1) appendRating({ root, sessionId: 's', messageId: `m${i}`, score: -1, now: base })
-  const before = readFile(root, 'SOUL.md')
-  assert.throws(
-    () => updateFile({ name: 'SOUL.md', append: '\n- 新的一条。\n', why: '测试写入闸门', root }),
-    /评分权重|写入被拒/,
-  )
-  assert.equal(readFile(root, 'SOUL.md'), before, '文件不该被改')
+  const r = updateFile({ name: 'SOUL.md', append: '\n- 差评期间也能写。\n', why: '验证评分不阻塞写入', root })
+  assert.equal(r.rating, 0)
+  const log = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8')
+  assert.match(log, /rating=0/)
 })
 
-check('小幅修改在混合评分下放行，但超 300 字符被拒', () => {
+check('超过 800 字符被拒（硬上限，与评分无关）', () => {
   const root = fresh()
-  for (let i = 0; i < 3; i += 1) appendRating({ root, sessionId: 's', messageId: 'g' + i, score: 1, now: base })
-  for (let i = 0; i < 3; i += 1) appendRating({ root, sessionId: 's', messageId: 'b' + i, score: -1, now: base })
-  const g = writeGate({ root, now: base })
-  assert.equal(g.maxDelta, 300)
-  const ok = updateFile({ name: 'SOUL.md', append: '\n- 小改一段。\n', why: '测试小幅写入', root })
-  assert.ok(ok.rating !== undefined)
+  appendRating({ root, sessionId: 's', messageId: 'a', score: 1, now: base })
+  updateFile({ name: 'SOUL.md', append: '\n- 小改。\n', why: '验证小改放行', root })
   assert.throws(
-    () => updateFile({ name: 'SOUL.md', append: '\n' + 'y'.repeat(400) + '\n', why: '测试超限', root }),
+    () => updateFile({ name: 'SOUL.md', append: '\n' + 'y'.repeat(900) + '\n', why: '验证超限', root }),
     /单次变更过大/,
   )
 })
@@ -165,14 +162,16 @@ check('好评 → 升格门槛降到 2 次', () => {
   assert.equal(r.done.length, 1, '好评下降门槛后应升格')
 })
 
-check('差评 → 暂停升格（日笔记继续留着）', () => {
+check('差评不加速：门槛仍是 3 次，但够格就照升', () => {
   const root = fresh()
   for (let i = 0; i < 4; i += 1) appendRating({ root, sessionId: 's', messageId: `m${i}`, score: -1, now: base })
   appendMemory({ text: '他喜欢我直说', kind: 'user', root, now: at(3) })
   for (let i = 0; i < 5; i += 1) recall({ query: '直说', root, now: base })
+  const g = promoteGate({ root, now: base })
+  assert.equal(g.minHits, 3, '差评不加门槛，也不降门槛')
+  assert.equal(g.allow, true)
   const r = promoteMemories({ root, now: base })
-  assert.equal(r.done.length, 0)
-  assert.match(r.failed[0].error, /偏低|暂停/)
+  assert.equal(r.done.length, 1, '差评不该禁止升格')
 })
 
 console.log(`\n通过 ${pass} / 失败 ${fail}`)
